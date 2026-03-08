@@ -4,6 +4,7 @@ WORKDIR /usr/app
 COPY ./package.json \
      ./package-lock.json \
      ./next.config.mjs \
+     ./runtime-caching.mjs \
      ./tsconfig.json \
      ./reset.d.ts \
      ./tailwind.config.js \
@@ -29,6 +30,7 @@ FROM node:21-alpine AS runtime-deps
 
 WORKDIR /usr/app
 COPY --from=base /usr/app/package.json /usr/app/package-lock.json /usr/app/next.config.mjs ./
+COPY --from=base /usr/app/runtime-caching.mjs ./
 COPY --from=base /usr/app/prisma ./prisma
 
 RUN npm ci --omit=dev --omit=optional --ignore-scripts && \
@@ -40,6 +42,7 @@ EXPOSE 3000/tcp
 WORKDIR /usr/app
 
 COPY --from=base /usr/app/package.json /usr/app/package-lock.json /usr/app/next.config.mjs ./
+COPY --from=base /usr/app/runtime-caching.mjs ./
 COPY --from=runtime-deps /usr/app/node_modules ./node_modules
 COPY ./public ./public
 COPY ./scripts ./scripts

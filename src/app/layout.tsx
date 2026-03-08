@@ -2,6 +2,7 @@ import { ApplePwaSplash } from '@/app/apple-pwa-splash'
 import { logoutAction } from '@/app/auth/actions'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { ProgressBar } from '@/components/progress-bar'
+import { PwaAutoRefresh } from '@/components/pwa-auto-refresh'
 import { ThemeProvider } from '@/components/theme-provider'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -163,6 +164,7 @@ export default async function RootLayout({
       <ApplePwaSplash icon="/logo-with-text.png" color="#027756" />
       <body className="min-h-[100dvh] flex flex-col items-stretch bg-slate-50 bg-opacity-30 dark:bg-background">
         <NextIntlClientProvider messages={messages}>
+          <PwaAutoRefresh />
           <ThemeProvider
             attribute="class"
             defaultTheme="system"

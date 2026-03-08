@@ -1,6 +1,18 @@
 import createNextIntlPlugin from 'next-intl/plugin'
+import runtimeCaching from './runtime-caching.mjs'
 
 const withNextIntl = createNextIntlPlugin()
+const withPWA = (await import('next-pwa')).default({
+  dest: 'public',
+  disable: process.env.NODE_ENV === 'development',
+  register: true,
+  skipWaiting: true,
+  clientsClaim: true,
+  fallbacks: {
+    document: '/offline',
+  },
+  runtimeCaching,
+})
 
 /**
  * Undefined entries are not supported. Push optional patterns to this array only if defined.
@@ -25,14 +37,14 @@ if (process.env.S3_UPLOAD_ENDPOINT) {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    remotePatterns
+    remotePatterns,
   },
   // Required to run in a codespace (see https://github.com/vercel/next.js/issues/58019)
   experimental: {
     serverActions: {
-        allowedOrigins: ['localhost:3000'],
+      allowedOrigins: ['localhost:3000'],
     },
-},
+  },
 }
 
-export default withNextIntl(nextConfig)
+export default withNextIntl(withPWA(nextConfig))
