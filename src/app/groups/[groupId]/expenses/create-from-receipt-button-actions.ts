@@ -5,10 +5,16 @@ import { formatCategoryForAIPrompt } from '@/lib/utils'
 import OpenAI from 'openai'
 import { ChatCompletionCreateParamsNonStreaming } from 'openai/resources/index.mjs'
 
-const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY })
+function getOpenAIClient() {
+  if (!env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is required for receipt extraction.')
+  }
+  return new OpenAI({ apiKey: env.OPENAI_API_KEY })
+}
 
 export async function extractExpenseInformationFromImage(imageUrl: string) {
   'use server'
+  const openai = getOpenAIClient()
   const categories = await getCategories()
 
   const body: ChatCompletionCreateParamsNonStreaming = {

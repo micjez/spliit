@@ -13,7 +13,7 @@ services:
       - spliit_network
 
   db:
-    image: postgres:latest
+    image: postgres:16
     expose:
       - 5432
     env_file:

@@ -1,15 +1,17 @@
 import { ApplePwaSplash } from '@/app/apple-pwa-splash'
+import { logoutAction } from '@/app/auth/actions'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { ProgressBar } from '@/components/progress-bar'
 import { ThemeProvider } from '@/components/theme-provider'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/toaster'
+import { getCurrentUser } from '@/lib/auth'
 import { env } from '@/lib/env'
 import { TRPCProvider } from '@/trpc/client'
 import type { Metadata, Viewport } from 'next'
-import { NextIntlClientProvider, useTranslations } from 'next-intl'
-import { getLocale, getMessages } from 'next-intl/server'
+import { NextIntlClientProvider } from 'next-intl'
+import { getLocale, getMessages, getTranslations } from 'next-intl/server'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Suspense } from 'react'
@@ -63,8 +65,9 @@ export const viewport: Viewport = {
   themeColor: '#047857',
 }
 
-function Content({ children }: { children: React.ReactNode }) {
-  const t = useTranslations()
+async function Content({ children }: { children: React.ReactNode }) {
+  const t = await getTranslations()
+  const user = await getCurrentUser()
   return (
     <TRPCProvider>
       <header className="fixed top-0 left-0 right-0 h-16 flex justify-between bg-white dark:bg-gray-950 bg-opacity-50 dark:bg-opacity-50 p-2 border-b backdrop-blur-sm z-50">
@@ -94,6 +97,28 @@ function Content({ children }: { children: React.ReactNode }) {
                 <Link href="/groups">{t('Header.groups')}</Link>
               </Button>
             </li>
+            {user ? (
+              <>
+                <li className="hidden sm:block text-muted-foreground px-1">
+                  {user.username}
+                </li>
+                <li>
+                  <form action={logoutAction}>
+                    <Button variant="ghost" size="sm" className="-my-3">
+                      Log out
+                    </Button>
+                  </form>
+                </li>
+              </>
+            ) : (
+              <>
+                <li>
+                  <Button variant="ghost" size="sm" asChild className="-my-3">
+                    <Link href="/signin">Sign in</Link>
+                  </Button>
+                </li>
+              </>
+            )}
             <li>
               <LocaleSwitcher />
             </li>
@@ -118,27 +143,6 @@ function Content({ children }: { children: React.ReactNode }) {
                 alt="Spliit"
               />
             </Link>
-          </div>
-          <div className="flex flex-col space-y a--no-underline-text-white">
-            <span>{t('Footer.madeIn')}</span>
-            <span>
-              {t.rich('Footer.builtBy', {
-                author: (txt) => (
-                  <a href="https://scastiel.dev" target="_blank" rel="noopener">
-                    {txt}
-                  </a>
-                ),
-                source: (txt) => (
-                  <a
-                    href="https://github.com/spliit-app/spliit/graphs/contributors"
-                    target="_blank"
-                    rel="noopener"
-                  >
-                    {txt}
-                  </a>
-                ),
-              })}
-            </span>
           </div>
         </div>
       </footer>

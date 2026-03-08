@@ -5,7 +5,10 @@ import { formatCategoryForAIPrompt } from '@/lib/utils'
 import OpenAI from 'openai'
 import { ChatCompletionCreateParamsNonStreaming } from 'openai/resources/index.mjs'
 
-const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY })
+function getOpenAIClient() {
+  if (!env.OPENAI_API_KEY) return null
+  return new OpenAI({ apiKey: env.OPENAI_API_KEY })
+}
 
 /** Limit of characters to be evaluated. May help avoiding abuse when using AI. */
 const limit = 40 // ~10 tokens
@@ -17,6 +20,11 @@ const limit = 40 // ~10 tokens
 export async function extractCategoryFromTitle(description: string) {
   'use server'
   const categories = await getCategories()
+  const openai = getOpenAIClient()
+
+  if (!openai) {
+    return { categoryId: categories.at(0)?.id ?? 0 }
+  }
 
   const body: ChatCompletionCreateParamsNonStreaming = {
     model: 'gpt-3.5-turbo',

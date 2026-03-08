@@ -11,6 +11,27 @@ datasource db {
   directUrl = env("POSTGRES_URL_NON_POOLING") // uses a direct connection
 }
 
+model User {
+  id           String        @id
+  username     String        @unique
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  sessions     AuthSession[]
+}
+
+model AuthSession {
+  id         String   @id
+  tokenHash  String   @unique
+  rememberMe Boolean  @default(false)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
 model Group {
   id           String        @id
   name         String
