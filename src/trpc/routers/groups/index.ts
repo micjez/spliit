@@ -1,5 +1,6 @@
 import { createTRPCRouter } from '@/trpc/init'
 import { activitiesRouter } from '@/trpc/routers/groups/activities'
+import { associateManyGroupsProcedure } from '@/trpc/routers/groups/associateMany.procedure'
 import { groupBalancesRouter } from '@/trpc/routers/groups/balances'
 import { createGroupProcedure } from '@/trpc/routers/groups/create.procedure'
 import { groupExpensesRouter } from '@/trpc/routers/groups/expenses'
@@ -18,6 +19,8 @@ export const groupsRouter = createTRPCRouter({
   get: getGroupProcedure,
   getDetails: getGroupDetailsProcedure,
   list: listGroupsProcedure,
+  listMine: listGroupsProcedure,
+  associateMany: associateManyGroupsProcedure,
   create: createGroupProcedure,
   update: updateGroupProcedure,
 })

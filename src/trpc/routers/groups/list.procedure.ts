@@ -1,14 +1,13 @@
-import { getGroups } from '@/lib/api'
+import { listUserGroups } from '@/lib/api'
 import { baseProcedure } from '@/trpc/init'
-import { z } from 'zod'
+import { TRPCError } from '@trpc/server'
 
 export const listGroupsProcedure = baseProcedure
-  .input(
-    z.object({
-      groupIds: z.array(z.string().min(1)),
-    }),
-  )
-  .query(async ({ input: { groupIds } }) => {
-    const groups = await getGroups(groupIds)
+  .query(async ({ ctx }) => {
+    if (!ctx.user) {
+      throw new TRPCError({ code: 'UNAUTHORIZED' })
+    }
+
+    const groups = await listUserGroups(ctx.user.id)
     return { groups }
   })

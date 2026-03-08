@@ -17,6 +17,7 @@ model User {
   passwordHash String
   createdAt    DateTime      @default(now())
   sessions     AuthSession[]
+  groups       UserGroup[]
 }
 
 model AuthSession {
@@ -42,6 +43,20 @@ model Group {
   expenses     Expense[]
   activities   Activity[]
   createdAt    DateTime      @default(now())
+  users        UserGroup[]
+}
+
+model UserGroup {
+  id        String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId   String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, groupId])
+  @@index([userId])
+  @@index([groupId])
 }
 
 model Participant {

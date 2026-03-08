@@ -7,7 +7,6 @@ import {
   getStarredGroups,
 } from '@/app/groups/recent-groups-helpers'
 import { Button } from '@/components/ui/button'
-import { getGroups } from '@/lib/api'
 import { trpc } from '@/trpc/client'
 import { AppRouterOutput } from '@/trpc/routers/_app'
 import { Loader2 } from 'lucide-react'
@@ -16,21 +15,7 @@ import Link from 'next/link'
 import { PropsWithChildren, useEffect, useState } from 'react'
 import { RecentGroupListCard } from './recent-group-list-card'
 
-export type RecentGroupsState =
-  | { status: 'pending' }
-  | {
-      status: 'partial'
-      groups: RecentGroups
-      starredGroups: string[]
-      archivedGroups: string[]
-    }
-  | {
-      status: 'complete'
-      groups: RecentGroups
-      groupsDetails: Awaited<ReturnType<typeof getGroups>>
-      starredGroups: string[]
-      archivedGroups: string[]
-    }
+const BACKFILL_STORAGE_KEY = 'user-groups-backfilled-v1'
 
 function sortGroups({
   groups,
@@ -61,55 +46,71 @@ function sortGroups({
 }
 
 export function RecentGroupList() {
-  const [state, setState] = useState<RecentGroupsState>({ status: 'pending' })
+  const [isReady, setIsReady] = useState(false)
+  const [starredGroups, setStarredGroups] = useState<string[]>([])
+  const [archivedGroups, setArchivedGroups] = useState<string[]>([])
+  const utils = trpc.useUtils()
+  const { mutateAsync: associateMany } = trpc.groups.associateMany.useMutation()
 
-  function loadGroups() {
-    const groupsInStorage = getRecentGroups()
-    const starredGroups = getStarredGroups()
-    const archivedGroups = getArchivedGroups()
-    setState({
-      status: 'partial',
-      groups: groupsInStorage,
-      starredGroups,
-      archivedGroups,
-    })
+  function loadLocalState() {
+    setStarredGroups(getStarredGroups())
+    setArchivedGroups(getArchivedGroups())
   }
 
   useEffect(() => {
-    loadGroups()
+    loadLocalState()
+    setIsReady(true)
   }, [])
 
-  if (state.status === 'pending') return null
+  useEffect(() => {
+    if (!isReady) return
+    const isBackfilled = localStorage.getItem(BACKFILL_STORAGE_KEY) === 'true'
+    if (isBackfilled) return
+
+    const runBackfill = async () => {
+      const groupIds = getRecentGroups().map((group) => group.id)
+      await associateMany({ groupIds })
+      localStorage.setItem(BACKFILL_STORAGE_KEY, 'true')
+      await utils.groups.listMine.invalidate()
+      await utils.groups.list.invalidate()
+    }
+
+    runBackfill().catch(() => {
+      // Keep loading list data even if backfill fails.
+    })
+  }, [associateMany, isReady, utils.groups.list, utils.groups.listMine])
+
+  if (!isReady) return null
 
   return (
     <RecentGroupList_
-      groups={state.groups}
-      starredGroups={state.starredGroups}
-      archivedGroups={state.archivedGroups}
-      refreshGroupsFromStorage={() => loadGroups()}
+      starredGroups={starredGroups}
+      archivedGroups={archivedGroups}
+      refreshGroupsFromStorage={loadLocalState}
     />
   )
 }
 
 function RecentGroupList_({
-  groups,
   starredGroups,
   archivedGroups,
   refreshGroupsFromStorage,
 }: {
-  groups: RecentGroups
   starredGroups: string[]
   archivedGroups: string[]
   refreshGroupsFromStorage: () => void
 }) {
   const t = useTranslations('Groups')
-  const { data, isLoading } = trpc.groups.list.useQuery({
-    groupIds: groups.map((group) => group.id),
-  })
+  const { data, isLoading, refetch } = trpc.groups.listMine.useQuery()
+  const groups = (data?.groups ?? []).map(({ id, name }) => ({ id, name }))
+  const reload = async () => {
+    refreshGroupsFromStorage()
+    await refetch()
+  }
 
   if (isLoading || !data) {
     return (
-      <GroupsPage reload={refreshGroupsFromStorage}>
+      <GroupsPage reload={reload}>
         <p>
           <Loader2 className="w-4 m-4 mr-2 inline animate-spin" />{' '}
           {t('loadingRecent')}
@@ -120,7 +121,7 @@ function RecentGroupList_({
 
   if (data.groups.length === 0) {
     return (
-      <GroupsPage reload={refreshGroupsFromStorage}>
+      <GroupsPage reload={reload}>
         <div className="text-sm space-y-2">
           <p>{t('NoRecent.description')}</p>
           <p>
@@ -141,7 +142,7 @@ function RecentGroupList_({
   })
 
   return (
-    <GroupsPage reload={refreshGroupsFromStorage}>
+    <GroupsPage reload={reload}>
       {starredGroupInfo.length > 0 && (
         <>
           <h2 className="mb-2">{t('starred')}</h2>
@@ -194,7 +195,7 @@ function GroupList({
   refreshGroupsFromStorage,
 }: {
   groups: RecentGroups
-  groupDetails?: AppRouterOutput['groups']['list']['groups']
+  groupDetails?: AppRouterOutput['groups']['listMine']['groups']
   starredGroups: string[]
   archivedGroups: string[]
   refreshGroupsFromStorage: () => void

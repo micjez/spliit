@@ -1,4 +1,3 @@
-import { saveRecentGroup } from '@/app/groups/recent-groups-helpers'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -49,7 +48,6 @@ export function AddGroupByUrlButton({ reload }: Props) {
               groupId: groupId,
             })
             if (group) {
-              saveRecentGroup({ id: group.id, name: group.name })
               reload()
               setUrl('')
               setOpen(false)

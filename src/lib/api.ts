@@ -151,6 +151,78 @@ export async function getGroups(groupIds: string[]) {
   }))
 }
 
+export async function listUserGroups(userId: string) {
+  return (
+    await prisma.userGroup.findMany({
+      where: { userId },
+      orderBy: [{ createdAt: 'desc' }],
+      include: {
+        group: {
+          include: { _count: { select: { participants: true } } },
+        },
+      },
+    })
+  ).map(({ group }) => ({
+    ...group,
+    createdAt: group.createdAt.toISOString(),
+  }))
+}
+
+export async function associateUserWithGroup(userId: string, groupId: string) {
+  const groupExists = await prisma.group.findUnique({
+    where: { id: groupId },
+    select: { id: true },
+  })
+  if (!groupExists) {
+    throw new Error(`Invalid group ID: ${groupId}`)
+  }
+
+  await prisma.userGroup.upsert({
+    where: {
+      userId_groupId: {
+        userId,
+        groupId,
+      },
+    },
+    update: {},
+    create: {
+      id: randomId(),
+      userId,
+      groupId,
+    },
+  })
+}
+
+export async function associateUserWithGroups(userId: string, groupIds: string[]) {
+  const uniqueGroupIds = Array.from(new Set(groupIds.filter(Boolean)))
+  if (uniqueGroupIds.length === 0) return { associatedCount: 0 }
+
+  const existingGroupIds = new Set(
+    (
+      await prisma.group.findMany({
+        where: { id: { in: uniqueGroupIds } },
+        select: { id: true },
+      })
+    ).map((group) => group.id),
+  )
+
+  const validGroupIds = uniqueGroupIds.filter((groupId) =>
+    existingGroupIds.has(groupId),
+  )
+  if (validGroupIds.length === 0) return { associatedCount: 0 }
+
+  const result = await prisma.userGroup.createMany({
+    data: validGroupIds.map((groupId) => ({
+      id: randomId(),
+      userId,
+      groupId,
+    })),
+    skipDuplicates: true,
+  })
+
+  return { associatedCount: result.count }
+}
+
 export async function updateExpense(
   groupId: string,
   expenseId: string,
