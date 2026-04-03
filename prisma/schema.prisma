@@ -20,6 +20,8 @@ model User {
   groups               UserGroup[]
   createdShoppingItems ShoppingItem[] @relation("ShoppingItemCreatedBy")
   boughtShoppingItems  ShoppingItem[] @relation("ShoppingItemBoughtBy")
+  createdStockItems    StockItem[]    @relation("StockItemCreatedBy")
+  checkedStockItems    StockItem[]    @relation("StockItemCheckedBy")
 }
 
 model AuthSession {
@@ -44,6 +46,7 @@ model Group {
   participants  Participant[]
   expenses      Expense[]
   shoppingItems ShoppingItem[]
+  stockItems    StockItem[]
   activities    Activity[]
   createdAt     DateTime       @default(now())
   users         UserGroup[]
@@ -77,6 +80,7 @@ model Category {
   name          String
   Expense       Expense[]
   shoppingItems ShoppingItem[]
+  stockItems    StockItem[]
 }
 
 model Expense {
@@ -119,6 +123,8 @@ model ShoppingItem {
   createdByUserId String
   boughtByUser    User?     @relation("ShoppingItemBoughtBy", fields: [boughtByUserId], references: [id], onDelete: SetNull)
   boughtByUserId  String?
+  stockItem       StockItem? @relation(fields: [stockItemId], references: [id], onDelete: SetNull)
+  stockItemId     String?
   boughtAt        DateTime?
   archivedAt      DateTime?
   isBought        Boolean   @default(false)
@@ -128,8 +134,36 @@ model ShoppingItem {
 
   @@index([groupId, isArchived, createdAt(sort: Desc)])
   @@index([groupId, categoryId])
+  @@index([stockItemId, isArchived])
   @@index([createdByUserId])
   @@index([boughtByUserId])
+}
+
+model StockItem {
+  id                  String         @id
+  title               String
+  currentQuantity     Decimal
+  unit                String
+  notes               String?        @db.Text
+  checkIntervalDays   Int
+  nextCheckAt         DateTime
+  lastCheckedAt       DateTime?
+  group               Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId             String
+  category            Category?      @relation(fields: [categoryId], references: [id])
+  categoryId          Int?
+  createdByUser       User           @relation("StockItemCreatedBy", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  createdByUserId     String
+  lastCheckedByUser   User?          @relation("StockItemCheckedBy", fields: [lastCheckedByUserId], references: [id], onDelete: SetNull)
+  lastCheckedByUserId String?
+  shoppingItems       ShoppingItem[]
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@index([groupId, nextCheckAt, createdAt(sort: Desc)])
+  @@index([groupId, categoryId])
+  @@index([createdByUserId])
+  @@index([lastCheckedByUserId])
 }
 
 model ExpenseDocument {

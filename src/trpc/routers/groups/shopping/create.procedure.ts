@@ -8,15 +8,28 @@ export const createGroupShoppingItemProcedure = baseProcedure
   .input(
     z.object({
       groupId: z.string().min(1),
+      stockItemId: z.string().min(1).optional(),
       shoppingItemFormValues: shoppingItemFormSchema,
     }),
   )
-  .mutation(async ({ ctx, input: { groupId, shoppingItemFormValues } }) => {
-    if (!ctx.user) {
-      throw new TRPCError({ code: 'UNAUTHORIZED' })
-    }
+  .mutation(
+    async ({
+      ctx,
+      input: { groupId, shoppingItemFormValues, stockItemId },
+    }) => {
+      if (!ctx.user) {
+        throw new TRPCError({ code: 'UNAUTHORIZED' })
+      }
 
-    return {
-      item: await createShoppingItem(groupId, ctx.user.id, shoppingItemFormValues),
-    }
-  })
+      return {
+        item: await createShoppingItem(
+          groupId,
+          ctx.user.id,
+          shoppingItemFormValues,
+          {
+            stockItemId,
+          },
+        ),
+      }
+    },
+  )

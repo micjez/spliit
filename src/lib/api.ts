@@ -3,6 +3,7 @@ import {
   ExpenseFormValues,
   GroupFormValues,
   ShoppingItemFormValues,
+  StockItemFormValues,
 } from '@/lib/schemas'
 import {
   ActivityType,
@@ -14,6 +15,12 @@ import { nanoid } from 'nanoid'
 
 export function randomId() {
   return nanoid()
+}
+
+function addDays(date: Date, days: number) {
+  const nextDate = new Date(date)
+  nextDate.setDate(nextDate.getDate() + days)
+  return nextDate
 }
 
 export async function createGroup(groupFormValues: GroupFormValues) {
@@ -197,7 +204,10 @@ export async function associateUserWithGroup(userId: string, groupId: string) {
   })
 }
 
-export async function associateUserWithGroups(userId: string, groupIds: string[]) {
+export async function associateUserWithGroups(
+  userId: string,
+  groupIds: string[],
+) {
   const uniqueGroupIds = Array.from(new Set(groupIds.filter(Boolean)))
   if (uniqueGroupIds.length === 0) return { associatedCount: 0 }
 
@@ -227,7 +237,10 @@ export async function associateUserWithGroups(userId: string, groupIds: string[]
   return { associatedCount: result.count }
 }
 
-export async function isUserAssociatedWithGroup(userId: string, groupId: string) {
+export async function isUserAssociatedWithGroup(
+  userId: string,
+  groupId: string,
+) {
   const association = await prisma.userGroup.findUnique({
     where: {
       userId_groupId: {
@@ -241,7 +254,10 @@ export async function isUserAssociatedWithGroup(userId: string, groupId: string)
   return association !== null
 }
 
-export async function assertUserCanAccessGroup(userId: string, groupId: string) {
+export async function assertUserCanAccessGroup(
+  userId: string,
+  groupId: string,
+) {
   if (!(await isUserAssociatedWithGroup(userId, groupId))) {
     throw new Error('User is not associated with this group.')
   }
@@ -472,6 +488,9 @@ export async function getGroupShoppingItemsByStatus(
       boughtByUser: {
         select: { id: true, username: true },
       },
+      stockItem: {
+        select: { id: true, title: true },
+      },
     },
     orderBy:
       status === 'ARCHIVED'
@@ -496,6 +515,9 @@ export async function getShoppingItem(groupId: string, shoppingItemId: string) {
       boughtByUser: {
         select: { id: true, username: true },
       },
+      stockItem: {
+        select: { id: true, title: true },
+      },
     },
   })
 }
@@ -504,8 +526,27 @@ export async function createShoppingItem(
   groupId: string,
   userId: string,
   shoppingItemFormValues: ShoppingItemFormValues,
+  options?: { stockItemId?: string | null },
 ) {
   await assertUserCanAccessGroup(userId, groupId)
+  const stockItemId = options?.stockItemId ?? null
+
+  if (stockItemId) {
+    await getStockItemForGroup(groupId, stockItemId)
+
+    const activeLinkedShoppingItem = await prisma.shoppingItem.findFirst({
+      where: {
+        groupId,
+        stockItemId,
+        isArchived: false,
+      },
+      select: { id: true },
+    })
+
+    if (activeLinkedShoppingItem) {
+      throw new Error('This stock item already has an active shopping item.')
+    }
+  }
 
   return prisma.shoppingItem.create({
     data: {
@@ -521,6 +562,7 @@ export async function createShoppingItem(
           : null,
       groupId,
       createdByUserId: userId,
+      stockItemId,
     },
     include: {
       category: true,
@@ -529,6 +571,9 @@ export async function createShoppingItem(
       },
       boughtByUser: {
         select: { id: true, username: true },
+      },
+      stockItem: {
+        select: { id: true, title: true },
       },
     },
   })
@@ -564,6 +609,9 @@ export async function updateShoppingItem(
       boughtByUser: {
         select: { id: true, username: true },
       },
+      stockItem: {
+        select: { id: true, title: true },
+      },
     },
   })
 }
@@ -594,6 +642,9 @@ export async function markShoppingItemBought(
       boughtByUser: {
         select: { id: true, username: true },
       },
+      stockItem: {
+        select: { id: true, title: true },
+      },
     },
   })
 }
@@ -623,6 +674,9 @@ export async function restoreShoppingItem(
       boughtByUser: {
         select: { id: true, username: true },
       },
+      stockItem: {
+        select: { id: true, title: true },
+      },
     },
   })
 }
@@ -640,7 +694,10 @@ export async function deleteShoppingItem(
   })
 }
 
-async function getShoppingItemForGroup(groupId: string, shoppingItemId: string) {
+async function getShoppingItemForGroup(
+  groupId: string,
+  shoppingItemId: string,
+) {
   const shoppingItem = await prisma.shoppingItem.findFirst({
     where: {
       id: shoppingItemId,
@@ -654,6 +711,234 @@ async function getShoppingItemForGroup(groupId: string, shoppingItemId: string) 
   }
 
   return shoppingItem
+}
+
+export async function getGroupStockItems(groupId: string) {
+  return prisma.stockItem.findMany({
+    where: { groupId },
+    include: {
+      category: true,
+      createdByUser: {
+        select: { id: true, username: true },
+      },
+      lastCheckedByUser: {
+        select: { id: true, username: true },
+      },
+      shoppingItems: {
+        where: { isArchived: false },
+        select: {
+          id: true,
+          title: true,
+          quantity: true,
+          unit: true,
+        },
+        orderBy: [{ createdAt: 'desc' }],
+        take: 1,
+      },
+    },
+    orderBy: [{ nextCheckAt: 'asc' }, { createdAt: 'desc' }],
+  })
+}
+
+export async function getStockItem(groupId: string, stockItemId: string) {
+  return prisma.stockItem.findFirst({
+    where: {
+      id: stockItemId,
+      groupId,
+    },
+    include: {
+      category: true,
+      createdByUser: {
+        select: { id: true, username: true },
+      },
+      lastCheckedByUser: {
+        select: { id: true, username: true },
+      },
+      shoppingItems: {
+        where: { isArchived: false },
+        select: {
+          id: true,
+          title: true,
+          quantity: true,
+          unit: true,
+        },
+        orderBy: [{ createdAt: 'desc' }],
+        take: 1,
+      },
+    },
+  })
+}
+
+export async function createStockItem(
+  groupId: string,
+  userId: string,
+  stockItemFormValues: StockItemFormValues,
+) {
+  await assertUserCanAccessGroup(userId, groupId)
+
+  const now = new Date()
+
+  return prisma.stockItem.create({
+    data: {
+      id: randomId(),
+      title: stockItemFormValues.title.trim(),
+      currentQuantity: stockItemFormValues.currentQuantity.toString(),
+      unit: stockItemFormValues.unit.trim(),
+      notes: stockItemFormValues.notes?.trim() || null,
+      categoryId:
+        stockItemFormValues.categoryId && stockItemFormValues.categoryId > 0
+          ? stockItemFormValues.categoryId
+          : null,
+      checkIntervalDays: stockItemFormValues.checkIntervalDays,
+      nextCheckAt: addDays(now, stockItemFormValues.checkIntervalDays),
+      groupId,
+      createdByUserId: userId,
+    },
+    include: {
+      category: true,
+      createdByUser: {
+        select: { id: true, username: true },
+      },
+      lastCheckedByUser: {
+        select: { id: true, username: true },
+      },
+      shoppingItems: {
+        where: { isArchived: false },
+        select: {
+          id: true,
+          title: true,
+          quantity: true,
+          unit: true,
+        },
+        orderBy: [{ createdAt: 'desc' }],
+        take: 1,
+      },
+    },
+  })
+}
+
+export async function updateStockItem(
+  groupId: string,
+  stockItemId: string,
+  userId: string,
+  stockItemFormValues: StockItemFormValues,
+) {
+  await assertUserCanAccessGroup(userId, groupId)
+  const existingStockItem = await getStockItemForGroup(groupId, stockItemId)
+
+  return prisma.stockItem.update({
+    where: { id: stockItemId },
+    data: {
+      title: stockItemFormValues.title.trim(),
+      currentQuantity: stockItemFormValues.currentQuantity.toString(),
+      unit: stockItemFormValues.unit.trim(),
+      notes: stockItemFormValues.notes?.trim() || null,
+      categoryId:
+        stockItemFormValues.categoryId && stockItemFormValues.categoryId > 0
+          ? stockItemFormValues.categoryId
+          : null,
+      checkIntervalDays: stockItemFormValues.checkIntervalDays,
+      nextCheckAt:
+        existingStockItem.lastCheckedAt === null
+          ? addDays(new Date(), stockItemFormValues.checkIntervalDays)
+          : addDays(
+              existingStockItem.lastCheckedAt,
+              stockItemFormValues.checkIntervalDays,
+            ),
+    },
+    include: {
+      category: true,
+      createdByUser: {
+        select: { id: true, username: true },
+      },
+      lastCheckedByUser: {
+        select: { id: true, username: true },
+      },
+      shoppingItems: {
+        where: { isArchived: false },
+        select: {
+          id: true,
+          title: true,
+          quantity: true,
+          unit: true,
+        },
+        orderBy: [{ createdAt: 'desc' }],
+        take: 1,
+      },
+    },
+  })
+}
+
+export async function checkStockItem(
+  groupId: string,
+  stockItemId: string,
+  userId: string,
+) {
+  await assertUserCanAccessGroup(userId, groupId)
+  const stockItem = await getStockItemForGroup(groupId, stockItemId)
+  const now = new Date()
+
+  return prisma.stockItem.update({
+    where: { id: stockItemId },
+    data: {
+      lastCheckedAt: now,
+      lastCheckedByUserId: userId,
+      nextCheckAt: addDays(now, stockItem.checkIntervalDays),
+    },
+    include: {
+      category: true,
+      createdByUser: {
+        select: { id: true, username: true },
+      },
+      lastCheckedByUser: {
+        select: { id: true, username: true },
+      },
+      shoppingItems: {
+        where: { isArchived: false },
+        select: {
+          id: true,
+          title: true,
+          quantity: true,
+          unit: true,
+        },
+        orderBy: [{ createdAt: 'desc' }],
+        take: 1,
+      },
+    },
+  })
+}
+
+export async function deleteStockItem(
+  groupId: string,
+  stockItemId: string,
+  userId: string,
+) {
+  await assertUserCanAccessGroup(userId, groupId)
+  await getStockItemForGroup(groupId, stockItemId)
+
+  return prisma.stockItem.delete({
+    where: { id: stockItemId },
+  })
+}
+
+async function getStockItemForGroup(groupId: string, stockItemId: string) {
+  const stockItem = await prisma.stockItem.findFirst({
+    where: {
+      id: stockItemId,
+      groupId,
+    },
+    select: {
+      id: true,
+      checkIntervalDays: true,
+      lastCheckedAt: true,
+    },
+  })
+
+  if (!stockItem) {
+    throw new Error('Invalid stock item ID.')
+  }
+
+  return stockItem
 }
 
 export async function getGroupExpenses(

@@ -221,7 +221,10 @@ export type SplittingOptions = {
 }
 
 export const shoppingItemFormSchema = z.object({
-  title: z.string({ required_error: 'titleRequired' }).min(2, 'min2').max(100, 'max100'),
+  title: z
+    .string({ required_error: 'titleRequired' })
+    .min(2, 'min2')
+    .max(100, 'max100'),
   quantity: inputCoercedToNumber
     .refine((quantity) => quantity > 0, 'quantityPositive')
     .refine((quantity) => quantity <= 1000000, 'quantityTooLarge'),
@@ -230,8 +233,48 @@ export const shoppingItemFormSchema = z.object({
     .trim()
     .min(1, 'min1')
     .max(20, 'max20'),
-  categoryId: z.union([z.coerce.number().int().positive(), z.literal(0)]).optional(),
+  categoryId: z
+    .union([z.coerce.number().int().positive(), z.literal(0)])
+    .optional(),
   notes: z.string().max(1000, 'max1000').optional(),
 })
 
 export type ShoppingItemFormValues = z.infer<typeof shoppingItemFormSchema>
+
+export const stockItemFormSchema = z.object({
+  title: z
+    .string({ required_error: 'titleRequired' })
+    .min(2, 'min2')
+    .max(100, 'max100'),
+  currentQuantity: inputCoercedToNumber
+    .refine((quantity) => quantity >= 0, 'quantityNotNegative')
+    .refine((quantity) => quantity <= 1000000, 'quantityTooLarge'),
+  unit: z
+    .string({ required_error: 'unitRequired' })
+    .trim()
+    .min(1, 'min1')
+    .max(20, 'max20'),
+  checkIntervalDays: z
+    .union([
+      z.number().int(),
+      z.string().transform((value, ctx) => {
+        const valueAsNumber = Number(value)
+        if (Number.isNaN(valueAsNumber)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'invalidNumber',
+          })
+        }
+        return valueAsNumber
+      }),
+    ])
+    .refine((days) => Number.isInteger(days), 'checkIntervalInteger')
+    .refine((days) => days > 0, 'checkIntervalPositive')
+    .refine((days) => days <= 365, 'checkIntervalTooLarge'),
+  categoryId: z
+    .union([z.coerce.number().int().positive(), z.literal(0)])
+    .optional(),
+  notes: z.string().max(1000, 'max1000').optional(),
+})
+
+export type StockItemFormValues = z.infer<typeof stockItemFormSchema>

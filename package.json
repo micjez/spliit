@@ -12,6 +12,7 @@
     "prettier": "prettier -w src",
     "postinstall": "prisma migrate deploy && prisma generate",
     "db:seed": "prisma db seed",
+    "db:seed-stock": "ts-node ./src/scripts/seedStockItems.ts",
     "build-image": "./scripts/build-image.sh",
     "start-container": "docker compose --env-file container.env up",
     "test": "jest",

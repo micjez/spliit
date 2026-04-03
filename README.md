@@ -35,7 +35,7 @@ Spliit is a free and open source alternative to Splitwise. You can either use th
 
 ## Contribute
 
-The project is open to contributions. Feel free to open an issue or even a pull-request! 
+The project is open to contributions. Feel free to open an issue or even a pull-request!
 Join the discussion in [the Spliit Discord server](https://discord.gg/YSyVXbwvSY).
 
 If you want to contribute financially and help us keep the application free and without ads, you can also:
@@ -45,7 +45,7 @@ If you want to contribute financially and help us keep the application free and 
 
 ### Translation
 
-The project's translations are managed using [our Weblate project](https://hosted.weblate.org/projects/spliit/spliit/). 
+The project's translations are managed using [our Weblate project](https://hosted.weblate.org/projects/spliit/spliit/).
 You can easily add missing translations to the project or even add a new language!
 Here is the current state of translation:
 
@@ -59,7 +59,7 @@ Here is the current state of translation:
 2. Start a PostgreSQL server. You can run `./scripts/start-local-db.sh` if you don’t have a server already.
 3. Copy the file `.env.example` as `.env`
 4. Run `npm install` to install dependencies. This will also apply database migrations and update Prisma Client.
-5. Run `npm run db:seed` to create demo users, a demo group, sample expenses, and shopping items.
+5. Run `npm run db:seed` to create demo users, a demo group, sample expenses, shopping items, and stock items.
 6. Run `npm run dev` to start the development server
 
 ## Run in a container
@@ -75,7 +75,15 @@ Run `npm run db:seed` to create a repeatable demo dataset for local development.
 
 - demo users: `alice`, `bob`, `charlie`
 - password for each demo user: `password123`
-- one demo group with participants, expenses, and shopping items
+- one demo group with participants, expenses, shopping items, and stock items
+
+## One-time stock bootstrap for existing groups
+
+Run `npm run db:seed-stock -- --group-id <group-id>` to add default stock items to one or more existing groups.
+
+- pass multiple groups as `--group-id group-a,group-b`
+- or seed every existing group with `npm run db:seed-stock -- --all-groups`
+- the script is idempotent for its default item titles within each group and skips items that already exist
 
 The seed is idempotent for the sample records it owns, so you can rerun it after resetting your local database.
 

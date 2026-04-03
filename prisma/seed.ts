@@ -33,6 +33,11 @@ const IDS = {
     detergent: 'seed-shopping-detergent',
     trashBags: 'seed-shopping-trash-bags',
   },
+  stockItems: {
+    toiletPaper: 'seed-stock-toilet-paper',
+    toothpaste: 'seed-stock-toothpaste',
+    dishSoap: 'seed-stock-dish-soap',
+  },
 } as const
 
 const USERS = [
@@ -61,7 +66,9 @@ async function upsertUser(user: (typeof USERS)[number]) {
 }
 
 async function main() {
-  console.log('Seeding demo users, group, expenses, and shopping items...')
+  console.log(
+    'Seeding demo users, group, expenses, shopping items, and stock items...',
+  )
 
   const [alice, bob, charlie] = await Promise.all(USERS.map(upsertUser))
 
@@ -167,6 +174,14 @@ async function main() {
     where: {
       id: {
         in: Object.values(IDS.shoppingItems),
+      },
+    },
+  })
+
+  await prisma.stockItem.deleteMany({
+    where: {
+      id: {
+        in: Object.values(IDS.stockItems),
       },
     },
   })
@@ -286,6 +301,50 @@ async function main() {
         archivedAt: new Date('2026-04-03T09:15:00Z'),
         isBought: true,
         isArchived: true,
+      },
+    ],
+  })
+
+  await prisma.stockItem.createMany({
+    data: [
+      {
+        id: IDS.stockItems.toiletPaper,
+        title: 'Toilet paper',
+        currentQuantity: '12',
+        unit: 'rolls',
+        groupId: IDS.group,
+        categoryId: 14,
+        createdByUserId: alice.id,
+        checkIntervalDays: 30,
+        nextCheckAt: new Date('2026-05-03T09:00:00Z'),
+        lastCheckedAt: new Date('2026-04-03T09:00:00Z'),
+        lastCheckedByUserId: alice.id,
+      },
+      {
+        id: IDS.stockItems.toothpaste,
+        title: 'Toothpaste',
+        currentQuantity: '3',
+        unit: 'tubes',
+        groupId: IDS.group,
+        categoryId: 14,
+        createdByUserId: bob.id,
+        checkIntervalDays: 30,
+        nextCheckAt: new Date('2026-04-10T09:00:00Z'),
+        lastCheckedAt: new Date('2026-03-11T09:00:00Z'),
+        lastCheckedByUserId: bob.id,
+      },
+      {
+        id: IDS.stockItems.dishSoap,
+        title: 'Dish soap',
+        currentQuantity: '1',
+        unit: 'bottle',
+        groupId: IDS.group,
+        categoryId: 37,
+        createdByUserId: charlie.id,
+        checkIntervalDays: 14,
+        nextCheckAt: new Date('2026-04-05T09:00:00Z'),
+        lastCheckedAt: new Date('2026-03-22T09:00:00Z'),
+        lastCheckedByUserId: charlie.id,
       },
     ],
   })
