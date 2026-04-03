@@ -1,5 +1,9 @@
 import { prisma } from '@/lib/prisma'
-import { ExpenseFormValues, GroupFormValues } from '@/lib/schemas'
+import {
+  ExpenseFormValues,
+  GroupFormValues,
+  ShoppingItemFormValues,
+} from '@/lib/schemas'
 import {
   ActivityType,
   Expense,
@@ -223,6 +227,26 @@ export async function associateUserWithGroups(userId: string, groupIds: string[]
   return { associatedCount: result.count }
 }
 
+export async function isUserAssociatedWithGroup(userId: string, groupId: string) {
+  const association = await prisma.userGroup.findUnique({
+    where: {
+      userId_groupId: {
+        userId,
+        groupId,
+      },
+    },
+    select: { id: true },
+  })
+
+  return association !== null
+}
+
+export async function assertUserCanAccessGroup(userId: string, groupId: string) {
+  if (!(await isUserAssociatedWithGroup(userId, groupId))) {
+    throw new Error('User is not associated with this group.')
+  }
+}
+
 export async function updateExpense(
   groupId: string,
   expenseId: string,
@@ -407,6 +431,229 @@ export async function getGroup(groupId: string) {
 
 export async function getCategories() {
   return prisma.category.findMany()
+}
+
+export async function getGroupShoppingItems(groupId: string) {
+  return prisma.shoppingItem.findMany({
+    where: { groupId },
+    include: {
+      category: true,
+      createdByUser: {
+        select: { id: true, username: true },
+      },
+      boughtByUser: {
+        select: { id: true, username: true },
+      },
+    },
+    orderBy: [{ isArchived: 'asc' }, { createdAt: 'desc' }],
+  })
+}
+
+export async function getGroupShoppingItemsByStatus(
+  groupId: string,
+  options?: {
+    offset?: number
+    length?: number
+    status?: 'ACTIVE' | 'ARCHIVED'
+  },
+) {
+  const status = options?.status ?? 'ACTIVE'
+
+  return prisma.shoppingItem.findMany({
+    where: {
+      groupId,
+      isArchived: status === 'ARCHIVED',
+    },
+    include: {
+      category: true,
+      createdByUser: {
+        select: { id: true, username: true },
+      },
+      boughtByUser: {
+        select: { id: true, username: true },
+      },
+    },
+    orderBy:
+      status === 'ARCHIVED'
+        ? [{ boughtAt: 'desc' }, { archivedAt: 'desc' }, { createdAt: 'desc' }]
+        : [{ createdAt: 'desc' }],
+    skip: options?.offset,
+    take: options?.length,
+  })
+}
+
+export async function getShoppingItem(groupId: string, shoppingItemId: string) {
+  return prisma.shoppingItem.findFirst({
+    where: {
+      id: shoppingItemId,
+      groupId,
+    },
+    include: {
+      category: true,
+      createdByUser: {
+        select: { id: true, username: true },
+      },
+      boughtByUser: {
+        select: { id: true, username: true },
+      },
+    },
+  })
+}
+
+export async function createShoppingItem(
+  groupId: string,
+  userId: string,
+  shoppingItemFormValues: ShoppingItemFormValues,
+) {
+  await assertUserCanAccessGroup(userId, groupId)
+
+  return prisma.shoppingItem.create({
+    data: {
+      id: randomId(),
+      title: shoppingItemFormValues.title.trim(),
+      quantity: shoppingItemFormValues.quantity.toString(),
+      unit: shoppingItemFormValues.unit.trim(),
+      notes: shoppingItemFormValues.notes?.trim() || null,
+      categoryId:
+        shoppingItemFormValues.categoryId &&
+        shoppingItemFormValues.categoryId > 0
+          ? shoppingItemFormValues.categoryId
+          : null,
+      groupId,
+      createdByUserId: userId,
+    },
+    include: {
+      category: true,
+      createdByUser: {
+        select: { id: true, username: true },
+      },
+      boughtByUser: {
+        select: { id: true, username: true },
+      },
+    },
+  })
+}
+
+export async function updateShoppingItem(
+  groupId: string,
+  shoppingItemId: string,
+  userId: string,
+  shoppingItemFormValues: ShoppingItemFormValues,
+) {
+  await assertUserCanAccessGroup(userId, groupId)
+  await getShoppingItemForGroup(groupId, shoppingItemId)
+
+  return prisma.shoppingItem.update({
+    where: { id: shoppingItemId },
+    data: {
+      title: shoppingItemFormValues.title.trim(),
+      quantity: shoppingItemFormValues.quantity.toString(),
+      unit: shoppingItemFormValues.unit.trim(),
+      notes: shoppingItemFormValues.notes?.trim() || null,
+      categoryId:
+        shoppingItemFormValues.categoryId &&
+        shoppingItemFormValues.categoryId > 0
+          ? shoppingItemFormValues.categoryId
+          : null,
+    },
+    include: {
+      category: true,
+      createdByUser: {
+        select: { id: true, username: true },
+      },
+      boughtByUser: {
+        select: { id: true, username: true },
+      },
+    },
+  })
+}
+
+export async function markShoppingItemBought(
+  groupId: string,
+  shoppingItemId: string,
+  userId: string,
+) {
+  await assertUserCanAccessGroup(userId, groupId)
+  await getShoppingItemForGroup(groupId, shoppingItemId)
+
+  const now = new Date()
+  return prisma.shoppingItem.update({
+    where: { id: shoppingItemId },
+    data: {
+      isBought: true,
+      isArchived: true,
+      boughtAt: now,
+      archivedAt: now,
+      boughtByUserId: userId,
+    },
+    include: {
+      category: true,
+      createdByUser: {
+        select: { id: true, username: true },
+      },
+      boughtByUser: {
+        select: { id: true, username: true },
+      },
+    },
+  })
+}
+
+export async function restoreShoppingItem(
+  groupId: string,
+  shoppingItemId: string,
+  userId: string,
+) {
+  await assertUserCanAccessGroup(userId, groupId)
+  await getShoppingItemForGroup(groupId, shoppingItemId)
+
+  return prisma.shoppingItem.update({
+    where: { id: shoppingItemId },
+    data: {
+      isBought: false,
+      isArchived: false,
+      boughtAt: null,
+      archivedAt: null,
+      boughtByUserId: null,
+    },
+    include: {
+      category: true,
+      createdByUser: {
+        select: { id: true, username: true },
+      },
+      boughtByUser: {
+        select: { id: true, username: true },
+      },
+    },
+  })
+}
+
+export async function deleteShoppingItem(
+  groupId: string,
+  shoppingItemId: string,
+  userId: string,
+) {
+  await assertUserCanAccessGroup(userId, groupId)
+  await getShoppingItemForGroup(groupId, shoppingItemId)
+
+  return prisma.shoppingItem.delete({
+    where: { id: shoppingItemId },
+  })
+}
+
+async function getShoppingItemForGroup(groupId: string, shoppingItemId: string) {
+  const shoppingItem = await prisma.shoppingItem.findFirst({
+    where: {
+      id: shoppingItemId,
+      groupId,
+    },
+    select: { id: true },
+  })
+
+  if (!shoppingItem) {
+    throw new Error('Invalid shopping item ID.')
+  }
+
+  return shoppingItem
 }
 
 export async function getGroupExpenses(

@@ -219,3 +219,19 @@ export type SplittingOptions = {
   splitMode: SplitMode
   paidFor: ExpenseFormValues['paidFor'] | null
 }
+
+export const shoppingItemFormSchema = z.object({
+  title: z.string({ required_error: 'titleRequired' }).min(2, 'min2').max(100, 'max100'),
+  quantity: inputCoercedToNumber
+    .refine((quantity) => quantity > 0, 'quantityPositive')
+    .refine((quantity) => quantity <= 1000000, 'quantityTooLarge'),
+  unit: z
+    .string({ required_error: 'unitRequired' })
+    .trim()
+    .min(1, 'min1')
+    .max(20, 'max20'),
+  categoryId: z.union([z.coerce.number().int().positive(), z.literal(0)]).optional(),
+  notes: z.string().max(1000, 'max1000').optional(),
+})
+
+export type ShoppingItemFormValues = z.infer<typeof shoppingItemFormSchema>

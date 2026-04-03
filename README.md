@@ -59,7 +59,8 @@ Here is the current state of translation:
 2. Start a PostgreSQL server. You can run `./scripts/start-local-db.sh` if you don’t have a server already.
 3. Copy the file `.env.example` as `.env`
 4. Run `npm install` to install dependencies. This will also apply database migrations and update Prisma Client.
-5. Run `npm run dev` to start the development server
+5. Run `npm run db:seed` to create demo users, a demo group, sample expenses, and shopping items.
+6. Run `npm run dev` to start the development server
 
 ## Run in a container
 
@@ -67,6 +68,16 @@ Here is the current state of translation:
 2. Copy the file `container.env.example` as `container.env`
 3. Run `npm run start-container` to start the postgres and the spliit2 containers
 4. You can access the app by browsing to http://localhost:3000
+
+## Seed data
+
+Run `npm run db:seed` to create a repeatable demo dataset for local development. It creates:
+
+- demo users: `alice`, `bob`, `charlie`
+- password for each demo user: `password123`
+- one demo group with participants, expenses, and shopping items
+
+The seed is idempotent for the sample records it owns, so you can rerun it after resetting your local database.
 
 ## Health check
 

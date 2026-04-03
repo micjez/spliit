@@ -59,7 +59,7 @@ import { useLocale, useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { match } from 'ts-pattern'
 import { DeletePopup } from '../../../../components/delete-popup'
 import { extractCategoryFromTitle } from '../../../../components/expense-form-actions'
@@ -304,9 +304,18 @@ export function ExpenseForm({
     locale,
     'Custom',
   )
+  const watchedExpenseDate = useWatch({
+    control: form.control,
+    name: 'expenseDate',
+  })
+  const watchedOriginalCurrency =
+    useWatch({
+      control: form.control,
+      name: 'originalCurrency',
+    }) ?? ''
   const exchangeRate = useCurrencyRate(
-    form.watch('expenseDate'),
-    form.watch('originalCurrency') ?? '',
+    watchedExpenseDate,
+    watchedOriginalCurrency,
     groupCurrency.code,
   )
 
@@ -316,9 +325,32 @@ export function ExpenseForm({
     originalCurrency.code.length &&
     originalCurrency.code !== group.currencyCode
 
+  const watchedSplitMode = useWatch({
+    control: form.control,
+    name: 'splitMode',
+  })
+  const watchedAmount = useWatch({
+    control: form.control,
+    name: 'amount',
+  })
+  const watchedOriginalAmount = useWatch({
+    control: form.control,
+    name: 'originalAmount',
+  })
+  const watchedConversionRate = useWatch({
+    control: form.control,
+    name: 'conversionRate',
+  })
+  const watchedIsReimbursement = useWatch({
+    control: form.control,
+    name: 'isReimbursement',
+  })
+  const originalAmountTouched = form.getFieldState('originalAmount').isTouched
+  const currencyDecimalDigits = groupCurrency.decimal_digits
+
   useEffect(() => {
     setManuallyEditedParticipants(new Set())
-  }, [form.watch('splitMode'), form.watch('amount')])
+  }, [watchedSplitMode, watchedAmount])
 
   useEffect(() => {
     const splitMode = form.getValues().splitMode
@@ -359,7 +391,7 @@ export function ExpenseForm({
             return {
               ...participant,
               shares: amountPerRemaining.toFixed(
-                groupCurrency.decimal_digits,
+                currencyDecimalDigits,
               ) as any, // Keep as string for consistent schema handling
             }
           }
@@ -370,8 +402,10 @@ export function ExpenseForm({
     }
   }, [
     manuallyEditedParticipants,
-    form.watch('amount'),
-    form.watch('splitMode'),
+    currencyDecimalDigits,
+    form,
+    watchedAmount,
+    watchedSplitMode,
   ])
 
   const [usingCustomConversionRate, setUsingCustomConversionRate] = useState(
@@ -382,19 +416,19 @@ export function ExpenseForm({
     if (!usingCustomConversionRate && exchangeRate.data) {
       form.setValue('conversionRate', exchangeRate.data)
     }
-  }, [exchangeRate.data, usingCustomConversionRate])
+  }, [exchangeRate.data, form, usingCustomConversionRate])
 
   useEffect(() => {
-    if (!form.getFieldState('originalAmount').isTouched) return
+    if (!originalAmountTouched) return
     const originalAmount = form.getValues('originalAmount') ?? 0
     const conversionRate = form.getValues('conversionRate')
 
     if (conversionRate && originalAmount) {
-      const rate = Number(conversionRate)
-      const convertedAmount = originalAmount * rate
+        const rate = Number(conversionRate)
+        const convertedAmount = originalAmount * rate
       if (!Number.isNaN(convertedAmount)) {
         const v = enforceCurrencyPattern(
-          convertedAmount.toFixed(groupCurrency.decimal_digits),
+          convertedAmount.toFixed(currencyDecimalDigits),
         )
         const income = Number(v) < 0
         setIsIncome(income)
@@ -403,9 +437,11 @@ export function ExpenseForm({
       }
     }
   }, [
-    form.watch('originalAmount'),
-    form.watch('conversionRate'),
-    form.getFieldState('originalAmount').isTouched,
+    currencyDecimalDigits,
+    form,
+    originalAmountTouched,
+    watchedConversionRate,
+    watchedOriginalAmount,
   ])
 
   let conversionRateMessage = ''
@@ -514,7 +550,7 @@ export function ExpenseForm({
                     {group.currencyCode ? (
                       <CurrencySelector
                         currencies={defaultCurrencyList(locale, '')}
-                        defaultValue={form.watch(field.name) ?? ''}
+                        defaultValue={field.value ?? ''}
                         isLoading={false}
                         onValueChange={(v) => onChange(v)}
                       />
@@ -655,9 +691,7 @@ export function ExpenseForm({
                   <FormLabel>{t('categoryField.label')}</FormLabel>
                   <CategorySelector
                     categories={categories}
-                    defaultValue={
-                      form.watch(field.name) // may be overwritten externally
-                    }
+                    defaultValue={field.value}
                     onValueChange={field.onChange}
                     isLoading={isCategoryLoading}
                   />
@@ -905,14 +939,14 @@ export function ExpenseForm({
                                 {field.value?.some(
                                   ({ participant }) => participant === id,
                                 ) &&
-                                  !form.watch('isReimbursement') && (
+                                  !watchedIsReimbursement && (
                                     <span className="text-muted-foreground ml-2">
                                       (
                                       {formatCurrency(
                                         groupCurrency,
                                         calculateShare(id, {
                                           amount: amountAsMinorUnits(
-                                            Number(form.watch('amount')),
+                                            Number(watchedAmount),
                                             groupCurrency,
                                           ), // Convert to cents
                                           paidFor: field.value.map(
@@ -923,10 +957,10 @@ export function ExpenseForm({
                                                 groupId: '',
                                               },
                                               shares:
-                                                form.watch('splitMode') ===
+                                                watchedSplitMode ===
                                                 'BY_PERCENTAGE'
                                                   ? Number(shares) * 100 // Convert percentage to basis points (e.g., 50% -> 5000)
-                                                  : form.watch('splitMode') ===
+                                                  : watchedSplitMode ===
                                                     'BY_AMOUNT'
                                                   ? amountAsMinorUnits(
                                                       shares,
@@ -937,9 +971,9 @@ export function ExpenseForm({
                                               participantId: '',
                                             }),
                                           ),
-                                          splitMode: form.watch('splitMode'),
+                                          splitMode: watchedSplitMode,
                                           isReimbursement:
-                                            form.watch('isReimbursement'),
+                                            watchedIsReimbursement,
                                         }),
                                         locale,
                                       )}

@@ -12,12 +12,14 @@ datasource db {
 }
 
 model User {
-  id           String        @id
-  username     String        @unique
-  passwordHash String
-  createdAt    DateTime      @default(now())
-  sessions     AuthSession[]
-  groups       UserGroup[]
+  id                   String         @id
+  username             String         @unique
+  passwordHash         String
+  createdAt            DateTime       @default(now())
+  sessions             AuthSession[]
+  groups               UserGroup[]
+  createdShoppingItems ShoppingItem[] @relation("ShoppingItemCreatedBy")
+  boughtShoppingItems  ShoppingItem[] @relation("ShoppingItemBoughtBy")
 }
 
 model AuthSession {
@@ -34,16 +36,17 @@ model AuthSession {
 }
 
 model Group {
-  id           String        @id
-  name         String
-  information  String?       @db.Text
-  currency     String        @default("$")
-  currencyCode String?
-  participants Participant[]
-  expenses     Expense[]
-  activities   Activity[]
-  createdAt    DateTime      @default(now())
-  users        UserGroup[]
+  id            String         @id
+  name          String
+  information   String?        @db.Text
+  currency      String         @default("$")
+  currencyCode  String?
+  participants  Participant[]
+  expenses      Expense[]
+  shoppingItems ShoppingItem[]
+  activities    Activity[]
+  createdAt     DateTime       @default(now())
+  users         UserGroup[]
 }
 
 model UserGroup {
@@ -69,10 +72,11 @@ model Participant {
 }
 
 model Category {
-  id       Int       @id @default(autoincrement())
-  grouping String
-  name     String
-  Expense  Expense[]
+  id            Int            @id @default(autoincrement())
+  grouping      String
+  name          String
+  Expense       Expense[]
+  shoppingItems ShoppingItem[]
 }
 
 model Expense {
@@ -99,6 +103,33 @@ model Expense {
   recurrenceRule         RecurrenceRule?       @default(NONE)
   recurringExpenseLink   RecurringExpenseLink?
   recurringExpenseLinkId String?
+}
+
+model ShoppingItem {
+  id              String    @id
+  title           String
+  quantity        Decimal
+  unit            String
+  notes           String?   @db.Text
+  group           Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId         String
+  category        Category? @relation(fields: [categoryId], references: [id])
+  categoryId      Int?
+  createdByUser   User      @relation("ShoppingItemCreatedBy", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  createdByUserId String
+  boughtByUser    User?     @relation("ShoppingItemBoughtBy", fields: [boughtByUserId], references: [id], onDelete: SetNull)
+  boughtByUserId  String?
+  boughtAt        DateTime?
+  archivedAt      DateTime?
+  isBought        Boolean   @default(false)
+  isArchived      Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([groupId, isArchived, createdAt(sort: Desc)])
+  @@index([groupId, categoryId])
+  @@index([createdByUserId])
+  @@index([boughtByUserId])
 }
 
 model ExpenseDocument {
