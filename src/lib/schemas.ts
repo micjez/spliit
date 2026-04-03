@@ -1,4 +1,4 @@
-import { RecurrenceRule, SplitMode } from '@prisma/client'
+import { ChoreRecurrenceRule, RecurrenceRule, SplitMode } from '@prisma/client'
 import Decimal from 'decimal.js'
 
 import * as z from 'zod'
@@ -278,3 +278,26 @@ export const stockItemFormSchema = z.object({
 })
 
 export type StockItemFormValues = z.infer<typeof stockItemFormSchema>
+
+export const choreItemFormSchema = z.object({
+  title: z
+    .string({ required_error: 'titleRequired' })
+    .min(2, 'min2')
+    .max(100, 'max100'),
+  dueAt: z.coerce.date(),
+  recurrenceRule: z
+    .enum<ChoreRecurrenceRule, [ChoreRecurrenceRule, ...ChoreRecurrenceRule[]]>(
+      Object.values(ChoreRecurrenceRule) as any,
+    )
+    .default('NONE'),
+  categoryId: z
+    .union([z.coerce.number().int().positive(), z.literal(0)])
+    .optional(),
+  assigneeParticipantId: z
+    .union([z.string().min(1), z.literal('')])
+    .optional()
+    .transform((value) => (value ? value : undefined)),
+  notes: z.string().max(1000, 'max1000').optional(),
+})
+
+export type ChoreItemFormValues = z.infer<typeof choreItemFormSchema>

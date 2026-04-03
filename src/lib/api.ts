@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import {
+  ChoreItemFormValues,
   ExpenseFormValues,
   GroupFormValues,
   ShoppingItemFormValues,
@@ -7,6 +8,7 @@ import {
 } from '@/lib/schemas'
 import {
   ActivityType,
+  ChoreRecurrenceRule,
   Expense,
   RecurrenceRule,
   RecurringExpenseLink,
@@ -941,6 +943,190 @@ async function getStockItemForGroup(groupId: string, stockItemId: string) {
   return stockItem
 }
 
+export async function getGroupChores(groupId: string) {
+  return prisma.chore.findMany({
+    where: { groupId },
+    include: {
+      category: true,
+      assigneeParticipant: {
+        select: { id: true, name: true },
+      },
+    },
+    orderBy: [
+      { isCompleted: 'asc' },
+      { dueAt: 'asc' },
+      { createdAt: 'desc' },
+    ],
+  })
+}
+
+export async function getChore(groupId: string, choreId: string) {
+  return prisma.chore.findFirst({
+    where: {
+      id: choreId,
+      groupId,
+    },
+    include: {
+      category: true,
+      assigneeParticipant: {
+        select: { id: true, name: true },
+      },
+    },
+  })
+}
+
+export async function createChore(
+  groupId: string,
+  userId: string,
+  choreItemFormValues: ChoreItemFormValues,
+) {
+  await assertUserCanAccessGroup(userId, groupId)
+  const group = await getGroup(groupId)
+  if (!group) throw new Error(`Invalid group ID: ${groupId}`)
+
+  if (
+    choreItemFormValues.assigneeParticipantId &&
+    !group.participants.some(
+      (participant) => participant.id === choreItemFormValues.assigneeParticipantId,
+    )
+  ) {
+    throw new Error('Invalid participant ID.')
+  }
+
+  return prisma.chore.create({
+    data: {
+      id: randomId(),
+      title: choreItemFormValues.title.trim(),
+      notes: choreItemFormValues.notes?.trim() || null,
+      dueAt: choreItemFormValues.dueAt,
+      recurrenceRule: choreItemFormValues.recurrenceRule,
+      groupId,
+      categoryId:
+        choreItemFormValues.categoryId && choreItemFormValues.categoryId > 0
+          ? choreItemFormValues.categoryId
+          : null,
+      assigneeParticipantId: choreItemFormValues.assigneeParticipantId ?? null,
+    },
+    include: {
+      category: true,
+      assigneeParticipant: {
+        select: { id: true, name: true },
+      },
+    },
+  })
+}
+
+export async function updateChore(
+  groupId: string,
+  choreId: string,
+  userId: string,
+  choreItemFormValues: ChoreItemFormValues,
+) {
+  await assertUserCanAccessGroup(userId, groupId)
+  const group = await getGroup(groupId)
+  if (!group) throw new Error(`Invalid group ID: ${groupId}`)
+  const existingChore = await getChoreForGroup(groupId, choreId)
+
+  if (
+    choreItemFormValues.assigneeParticipantId &&
+    !group.participants.some(
+      (participant) => participant.id === choreItemFormValues.assigneeParticipantId,
+    )
+  ) {
+    throw new Error('Invalid participant ID.')
+  }
+
+  return prisma.chore.update({
+    where: { id: choreId },
+    data: {
+      title: choreItemFormValues.title.trim(),
+      notes: choreItemFormValues.notes?.trim() || null,
+      dueAt: choreItemFormValues.dueAt,
+      recurrenceRule: choreItemFormValues.recurrenceRule,
+      categoryId:
+        choreItemFormValues.categoryId && choreItemFormValues.categoryId > 0
+          ? choreItemFormValues.categoryId
+          : null,
+      assigneeParticipantId: choreItemFormValues.assigneeParticipantId ?? null,
+      isCompleted:
+        choreItemFormValues.recurrenceRule === ChoreRecurrenceRule.NONE
+          ? existingChore.isCompleted
+          : false,
+    },
+    include: {
+      category: true,
+      assigneeParticipant: {
+        select: { id: true, name: true },
+      },
+    },
+  })
+}
+
+export async function completeChore(
+  groupId: string,
+  choreId: string,
+  userId: string,
+) {
+  await assertUserCanAccessGroup(userId, groupId)
+  const chore = await getChoreForGroup(groupId, choreId)
+  const now = new Date()
+
+  return prisma.chore.update({
+    where: { id: choreId },
+    data:
+      chore.recurrenceRule === ChoreRecurrenceRule.NONE
+        ? {
+            isCompleted: true,
+            lastCompletedAt: now,
+          }
+        : {
+            isCompleted: false,
+            lastCompletedAt: now,
+            dueAt: calculateNextChoreDate(chore.recurrenceRule, chore.dueAt),
+          },
+    include: {
+      category: true,
+      assigneeParticipant: {
+        select: { id: true, name: true },
+      },
+    },
+  })
+}
+
+export async function deleteChore(
+  groupId: string,
+  choreId: string,
+  userId: string,
+) {
+  await assertUserCanAccessGroup(userId, groupId)
+  await getChoreForGroup(groupId, choreId)
+
+  return prisma.chore.delete({
+    where: { id: choreId },
+  })
+}
+
+async function getChoreForGroup(groupId: string, choreId: string) {
+  const chore = await prisma.chore.findFirst({
+    where: {
+      id: choreId,
+      groupId,
+    },
+    select: {
+      id: true,
+      dueAt: true,
+      recurrenceRule: true,
+      isCompleted: true,
+    },
+  })
+
+  if (!chore) {
+    throw new Error('Invalid chore ID.')
+  }
+
+  return chore
+}
+
 export async function getGroupExpenses(
   groupId: string,
   options?: { offset?: number; length?: number; filter?: string },
@@ -1225,6 +1411,27 @@ function calculateNextDate(
   }
 
   return nextDate
+}
+
+function calculateNextChoreDate(
+  recurrenceRule: ChoreRecurrenceRule,
+  priorDateToNextRecurrence: Date,
+): Date {
+  switch (recurrenceRule) {
+    case ChoreRecurrenceRule.NONE:
+      return priorDateToNextRecurrence
+    case ChoreRecurrenceRule.DAILY:
+      return addDays(priorDateToNextRecurrence, 1)
+    case ChoreRecurrenceRule.WEEKLY:
+      return addDays(priorDateToNextRecurrence, 7)
+    case ChoreRecurrenceRule.MONTHLY: {
+      const nextDate = new Date(priorDateToNextRecurrence)
+      nextDate.setMonth(nextDate.getMonth() + 1)
+      return nextDate
+    }
+  }
+
+  return priorDateToNextRecurrence
 }
 
 function isDateInNextMonth(

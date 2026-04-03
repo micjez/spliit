@@ -47,6 +47,7 @@ model Group {
   expenses      Expense[]
   shoppingItems ShoppingItem[]
   stockItems    StockItem[]
+  chores        Chore[]
   activities    Activity[]
   createdAt     DateTime       @default(now())
   users         UserGroup[]
@@ -72,6 +73,7 @@ model Participant {
   groupId         String
   expensesPaidBy  Expense[]
   expensesPaidFor ExpensePaidFor[]
+  choresAssigned  Chore[]
 }
 
 model Category {
@@ -81,6 +83,29 @@ model Category {
   Expense       Expense[]
   shoppingItems ShoppingItem[]
   stockItems    StockItem[]
+  chores        Chore[]
+}
+
+model Chore {
+  id                    String              @id
+  title                 String
+  notes                 String?             @db.Text
+  dueAt                 DateTime            @db.Date
+  recurrenceRule        ChoreRecurrenceRule @default(NONE)
+  isCompleted           Boolean             @default(false)
+  lastCompletedAt       DateTime?
+  group                 Group               @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId               String
+  category              Category?           @relation(fields: [categoryId], references: [id])
+  categoryId            Int?
+  assigneeParticipant   Participant?        @relation(fields: [assigneeParticipantId], references: [id], onDelete: SetNull)
+  assigneeParticipantId String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@index([groupId, isCompleted, dueAt, createdAt(sort: Desc)])
+  @@index([groupId, categoryId])
+  @@index([assigneeParticipantId])
 }
 
 model Expense {
@@ -199,6 +224,13 @@ model RecurringExpenseLink {
 }
 
 enum RecurrenceRule {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum ChoreRecurrenceRule {
   NONE
   DAILY
   WEEKLY
